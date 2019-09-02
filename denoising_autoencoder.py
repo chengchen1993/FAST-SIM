@@ -69,10 +69,10 @@ def train_and_apply():
     x_test=array2D_float(x_test)
     #Different type of reconstruction variables
 
-    #BN normalization
+    #BN normalization   
     gamma=0
     beta=0.2
-
+  
     ar=np.array(x_train)
     a = K.constant(ar[:,0])
     mean = K.mean(a)
@@ -121,14 +121,14 @@ def train_and_apply():
 
     # Shape info needed to build Decoder Model
     shape = K.int_shape(x)
-
+    
     # Generate the latent vector
     latent = Dense(latent_dim, name='latent_vector')(x)
 
     # Instantiate Encoder Model
     encoder = Model(inputs, latent, name='encoder')
     encoder.summary()
-
+     
     # Build the Decoder Model
     latent_inputs = Input(shape=(latent_dim,), name='decoder_input')
     x = Dense( shape[1] )(latent_inputs)
@@ -137,7 +137,7 @@ def train_and_apply():
     # Instantiate Decoder Model
     decoder = Model(latent_inputs, outputs)
     decoder.summary()
-
+    
     # Autoencoder = Encoder + Decoder
     # Instantiate Autoencoder Model
     autoencoder = Model(inputs, decoder(encoder(inputs)), name='autoencoder')
@@ -145,18 +145,18 @@ def train_and_apply():
 
     # Train the autoencoder - 'mse'
     autoencoder.compile(loss='mse', optimizer='adam')
-
+    
     autoencoder.fit(x_train_noisy, x_train,
                     validation_data=(x_test_noisy,x_test),
                     epochs=options.epochs,
                     batch_size=batch_size)
-
+   
     # Predict the Autoencoder output from corrupted test imformation
     x_decoded = autoencoder.predict(x_test_noisy)  # mean
 
-    # Train the autoencoder - quantile_loss
+    # Train the autoencoder - quantile_loss    
     autoencoder.compile(loss=quantile_loss, optimizer='adam')
-
+    
     autoencoder.fit(x_train_noisy, x_train,
                     validation_data=(x_test_noisy,x_test),
                     epochs=options.epochs,
@@ -165,7 +165,7 @@ def train_and_apply():
     # Predict the Autoencoder output from corrupted test imformation
     x_decoded_quantile_loss = autoencoder.predict(x_test_noisy)  # mean+sigma
 
-        # Draw Comparision Plots
+    # Draw Comparision Plots 
     os.system("rm -rf Plots")
     os.system("mkdir Plots")
     for j in range(0, nvariable):
@@ -176,7 +176,7 @@ def train_and_apply():
         fPads1.SetLeftMargin(   0.10)
         fPads1.SetRightMargin(  0.03)
         fPads2.SetLeftMargin(   0.10 )
-        fPads2.SetRightMargin(  0.03)
+        fPads2.SetRightMargin(  0.03) 
         fPads2.SetBottomMargin( 0.25)
         fPads1.Draw()
         fPads2.Draw()
@@ -188,32 +188,43 @@ def train_and_apply():
         lbin=str(float((max-min)/nbin))
         xtitle=branch_rec[j]
         ytitle="Events/"+lbin
+        h_gen=TH1D("h_gen",""+";%s;%s"%(xtitle,ytitle),nbin,min,max)
+        h_gen.Sumw2()
         h_rec=TH1D("h_rec",""+";%s;%s"%(xtitle,ytitle),nbin,min,max)
         h_rec.Sumw2()
-        h_pre=TH1D("h_pre",""+";%s;%s"%(xtitle,ytitle),nbin,min,max)
+        h_pre=TH1D("h_pre",""+";%s;%s"%(xtitle,ytitle),nbin,min,max)  
         h_pre.Sumw2()
         for i in range(x_test_noisy.shape[0]):
+                  h_gen.Fill(x_train_noisy[i][j])
                   h_rec.Fill(x_test_noisy[i][j])
                   h_pre.Fill(x_decoded[i][j])
+        h_gen=UnderOverFlow1D(h_gen)
         h_rec=UnderOverFlow1D(h_rec)
         h_pre=UnderOverFlow1D(h_pre)
-        maxY = TMath.Max( h_rec.GetMaximum(), h_pre.GetMaximum() )
+        maxR = 2
+        maxY = TMath.Max( h_rec.GetMaximum(), h_pre.GetMaximum() ) 
+        h_gen.SetLineColor(4)
+        h_gen.SetFillStyle(0)
+        h_gen.SetLineWidth(2)
+        h_gen.SetLineStyle(1)
         h_rec.SetLineColor(2)
         h_rec.SetFillStyle(0)
         h_rec.SetLineWidth(2)
         h_rec.SetLineStyle(1)
-        h_pre.SetLineColor(3)
+        h_pre.SetLineColor(3) 
         h_pre.SetFillStyle(0)
         h_pre.SetLineWidth(2)
-        h_pre.SetLineStyle(1)
+        h_pre.SetLineStyle(1) 
+        h_gen.SetStats(0)  
         h_rec.SetStats(0)
         h_pre.SetStats(0)
-        h_rec.GetYaxis().SetRangeUser( 0 , maxY*1.1 )
-        h_rec.Draw("HIST")
+        h_gen.GetYaxis().SetRangeUser( 0 , maxY*1.1 )
+        h_gen.Draw("HIST")
+        h_rec.Draw("same HIST")
         h_pre.Draw("same HIST")
-        h_rec.GetYaxis().SetTitleSize(0.06)
-        h_rec.GetYaxis().SetTitleOffset(0.78)
-        theLeg = TLegend(0.5, 0.45, 0.95, 0.82, "", "NDC")
+        h_gen.GetYaxis().SetTitleSize(0.06)
+        h_gen.GetYaxis().SetTitleOffset(0.85)
+        theLeg = TLegend(0.58, 0.45, 0.99, 0.82, "", "NDC")
         theLeg.SetName("theLegend")
         theLeg.SetBorderSize(0)
         theLeg.SetLineColor(0)
@@ -223,6 +234,7 @@ def train_and_apply():
         theLeg.SetLineStyle(0)
         theLeg.SetTextFont(42)
         theLeg.SetTextSize(.05)
+        theLeg.AddEntry(h_gen,"Generation","L")
         theLeg.AddEntry(h_rec,"Reconstruction","L")
         theLeg.AddEntry(h_pre,"Prediction","L")
         theLeg.SetY1NDC(0.9-0.05*6-0.005)
@@ -231,9 +243,9 @@ def train_and_apply():
         theLeg.Draw()
         title = TLatex(0.91,0.93,"AE prediction compare with reconstruction, epochs="+str(options.epochs))
         title.SetNDC()
-        title.SetTextSize(0.05)
+        title.SetTextSize(0.05)  
         title.SetTextFont(42)
-        title.SetTextAlign(31)
+        title.SetTextAlign(31)  
         title.SetLineWidth(2)
         title.Draw()
         fPads2.cd()
@@ -242,7 +254,7 @@ def train_and_apply():
         h_Ratio.SetLineWidth(2)
         h_Ratio.SetMarkerStyle(8)
         h_Ratio.SetMarkerSize(0.7)
-        h_Ratio.GetYaxis().SetRangeUser( 0 , 2 )
+        h_Ratio.GetYaxis().SetRangeUser( 0 , maxR )
         h_Ratio.GetYaxis().SetNdivisions(504,0)
         h_Ratio.GetYaxis().SetTitle("Pre/Rec")
         h_Ratio.GetYaxis().SetTitleOffset(0.35)
@@ -265,7 +277,7 @@ def train_and_apply():
                         if B<0.1 and eB>=B :
                                        eB=0.92
                                        Err= 0.
-                        if B!=0.:
+                        if B!=0.: 
                                        Err=TMath.Sqrt((eD*eD)/(B*B)+(D*D*eB*eB)/(B*B*B*B))
                                        h_Ratio.SetBinContent(i, D/B)
                                        h_Ratio.SetBinError(i, Err)
@@ -273,12 +285,42 @@ def train_and_apply():
                                        Err=TMath.Sqrt( (eD*eD)/(eB*eB)+(D*D*eB*eB)/(eB*eB*eB*eB) )
                                        h_Ratio.SetBinContent(i, D/0.92)
                                        h_Ratio.SetBinError(i, Err)
-                        if D==0 and B==0:
+                        if D==0 and B==0:  
                                        h_Ratio.SetBinContent(i, -1)
                                        h_Ratio.SetBinError(i, 0)
+                        if h_Ratio.GetBinContent(i)>maxR:
+                                       h_Ratio.SetBinContent(i, maxR);
                         h_Ratio.Draw("e0")
                         axis1.Draw()
         c.SaveAs("Plots/"+branch_rec[j]+"_comparision.png")
 
+        #2D plots
+        c2 = TCanvas("c2","c2", 700,700)
+        fPads3 = TPad("pad3", "Run2", 0.0, 0.0, 1.00, 1.00)
+        fPads3.SetBottomMargin( 0.09)
+        fPads3.SetLeftMargin(   0.10)
+        fPads3.SetRightMargin(  0.15)
+        fPads3.Draw()
+        fPads3.cd()
+        xtitle = branch_rec[j]+" (Rec)"
+        ytitle = branch_rec[j]+" (Pre)"
+        h_2D=TH2D("h_2D",""+";%s;%s"%(xtitle,ytitle),nbin,min,max,nbin,min,max)
+        h_2D.Sumw2()
+        h_2D.SetStats(0)
+        for i in range(x_test_noisy.shape[0]):
+                  h_2D.Fill(x_test_noisy[i][j],x_decoded[i][j])
+        h_2D.GetYaxis().SetTitleSize(0.04)
+        h_2D.GetYaxis().SetTitleOffset(1.20)
+        h_2D.Draw("colz")
+        title = TLatex(0.93,0.93,"AE prediction compare with reconstruction, epochs="+str(options.epochs))
+        title.SetNDC()
+        title.SetTextSize(0.04)
+        title.SetTextFont(42)
+        title.SetTextAlign(31)
+        title.SetLineWidth(2)
+        title.Draw()
+        c2.SaveAs("Plots/2D_"+branch_rec[j]+"_comparision.png")
+
 if __name__ == '__main__':
+                  
     train_and_apply()
