@@ -25,10 +25,8 @@ import os
 from ROOT import gROOT, TPaveLabel, TPie, gStyle, gSystem, TGaxis, TStyle, TLatex, TString, TF1,TFile,TLine, TLegend, TH1D,TH2D,THStack, TGraph, TGraphErrors,TChain, TCanvas, TMatrixDSym, TMath, TText, TPad, TVectorD, RooFit, RooArgSet, RooArgList, RooArgSet, RooAbsData, RooAbsPdf, RooAddPdf, RooWorkspace, RooExtendPdf,RooCBShape, RooLandau, RooFFTConvPdf, RooGaussian, RooBifurGauss, RooArgusBG,RooDataSet, RooExponential,RooBreitWigner, RooVoigtian, RooNovosibirsk, RooRealVar,RooFormulaVar, RooDataHist, RooHist,RooCategory, RooChebychev, RooSimultaneous, RooGenericPdf,RooConstVar, RooKeysPdf, RooHistPdf, RooEffProd, RooProdPdf, TIter, kTRUE, kFALSE, kGray, kRed, kDashed, kGreen,kAzure, kOrange, kBlack,kBlue,kYellow,kCyan, kMagenta, kWhite
 
 parser = OptionParser()
-parser.add_option('--maxevents',action="store",type="int",dest="maxevents",default=1000000000)
+parser.add_option('--maxevents',action="store",type="int",dest="maxevents",default=1000000)
 parser.add_option('--epochs',action="store",type="int",dest="epochs",default=20)
-parser.add_option('--branch',action="store",type="int",dest="branch",default=1)
-#branch:1-23,the branch to be drawn
 (options, args) = parser.parse_args()
 
 def UnderOverFlow1D(h):
@@ -71,10 +69,10 @@ def train_and_apply():
     x_test=array2D_float(x_test)
     #Different type of reconstruction variables
 
-    #BN normalization   
+    #BN normalization
     gamma=0
     beta=0.2
-  
+
     ar=np.array(x_train)
     a = K.constant(ar[:,0])
     mean = K.mean(a)
@@ -123,14 +121,14 @@ def train_and_apply():
 
     # Shape info needed to build Decoder Model
     shape = K.int_shape(x)
-    
+
     # Generate the latent vector
     latent = Dense(latent_dim, name='latent_vector')(x)
 
     # Instantiate Encoder Model
     encoder = Model(inputs, latent, name='encoder')
     encoder.summary()
-     
+
     # Build the Decoder Model
     latent_inputs = Input(shape=(latent_dim,), name='decoder_input')
     x = Dense( shape[1] )(latent_inputs)
@@ -139,7 +137,7 @@ def train_and_apply():
     # Instantiate Decoder Model
     decoder = Model(latent_inputs, outputs)
     decoder.summary()
-    
+
     # Autoencoder = Encoder + Decoder
     # Instantiate Autoencoder Model
     autoencoder = Model(inputs, decoder(encoder(inputs)), name='autoencoder')
@@ -147,18 +145,18 @@ def train_and_apply():
 
     # Train the autoencoder - 'mse'
     autoencoder.compile(loss='mse', optimizer='adam')
-    
+
     autoencoder.fit(x_train_noisy, x_train,
                     validation_data=(x_test_noisy,x_test),
                     epochs=options.epochs,
                     batch_size=batch_size)
-   
+
     # Predict the Autoencoder output from corrupted test imformation
     x_decoded = autoencoder.predict(x_test_noisy)  # mean
 
-    # Train the autoencoder - quantile_loss    
+    # Train the autoencoder - quantile_loss
     autoencoder.compile(loss=quantile_loss, optimizer='adam')
-    
+
     autoencoder.fit(x_train_noisy, x_train,
                     validation_data=(x_test_noisy,x_test),
                     epochs=options.epochs,
@@ -167,117 +165,120 @@ def train_and_apply():
     # Predict the Autoencoder output from corrupted test imformation
     x_decoded_quantile_loss = autoencoder.predict(x_test_noisy)  # mean+sigma
 
-    # Draw Comparision Plots 
-    c = TCanvas("c","c", 700,700)
-    fPads1 = TPad("pad1", "Run2", 0.0, 0.29, 1.00, 1.00)
-    fPads2 = TPad("pad2", "", 0.00, 0.00, 1.00, 0.29)
-    fPads1.SetBottomMargin( 0.007)
-    fPads1.SetLeftMargin(   0.10)
-    fPads1.SetRightMargin(  0.03)
-    fPads2.SetLeftMargin(   0.10 )
-    fPads2.SetRightMargin(  0.03) 
-    fPads2.SetBottomMargin( 0.25)
-    fPads1.Draw()
-    fPads2.Draw()
-    fPads1.cd()
-    nbin=50
-    min=-1.
-    max=1.
-    lbin=(max-min)/nbin
-    lbin=str(float((max-min)/nbin))
-    xtitle=branch_rec[options.branch-1]
-    ytitle="Events/"+lbin
-    h_rec=TH1D("h_rec",""+";%s;%s"%(xtitle,ytitle),nbin,min,max)
-    h_rec.Sumw2()
-    h_pre=TH1D("h_pre",""+";%s;%s"%(xtitle,ytitle),nbin,min,max)  
-    h_pre.Sumw2()
-    for i in range(x_test_noisy.shape[0]):
-              h_rec.Fill(x_test_noisy[i][options.branch-1])
-              h_pre.Fill(x_decoded[i][options.branch-1])
-    h_rec=UnderOverFlow1D(h_rec)
-    h_pre=UnderOverFlow1D(h_pre)
-    maxY = TMath.Max( h_rec.GetMaximum(), h_pre.GetMaximum() ) 
-    h_rec.SetLineColor(2)
-    h_rec.SetFillStyle(0)
-    h_rec.SetLineWidth(2)
-    h_rec.SetLineStyle(1)
-    h_pre.SetLineColor(3) 
-    h_pre.SetFillStyle(0)
-    h_pre.SetLineWidth(2)
-    h_pre.SetLineStyle(1)   
-    h_rec.SetStats(0)
-    h_pre.SetStats(0)
-    h_rec.GetYaxis().SetRangeUser( 0 , maxY*1.1 )
-    h_rec.Draw("HIST")
-    h_pre.Draw("same HIST")
-    h_rec.GetYaxis().SetTitleSize(0.06)
-    h_rec.GetYaxis().SetTitleOffset(0.78)
-    theLeg = TLegend(0.5, 0.45, 0.95, 0.82, "", "NDC")
-    theLeg.SetName("theLegend")
-    theLeg.SetBorderSize(0)
-    theLeg.SetLineColor(0)
-    theLeg.SetFillColor(0)
-    theLeg.SetFillStyle(0)
-    theLeg.SetLineWidth(0)
-    theLeg.SetLineStyle(0)
-    theLeg.SetTextFont(42)
-    theLeg.SetTextSize(.05)
-    theLeg.AddEntry(h_rec,"Reconstruction","L");
-    theLeg.AddEntry(h_pre,"Prediction","L");
-    theLeg.SetY1NDC(0.9-0.05*6-0.005)
-    theLeg.SetY1(theLeg.GetY1NDC())
-    fPads1.cd()
-    theLeg.Draw()
-    title = TLatex(0.91,0.93,"AE prediction compare with reconstruction, epochs="+str(options.epochs))
-    title.SetNDC()
-    title.SetTextSize(0.05)  
-    title.SetTextFont(42)
-    title.SetTextAlign(31)  
-    title.SetLineWidth(2)
-    title.Draw()
-    fPads2.cd()
-    h_Ratio=TH1D("h_Ratio",""+";%s;%s"%(xtitle,ytitle),nbin,min,max)
-    h_Ratio.SetLineColor(1)
-    h_Ratio.SetLineWidth(2)
-    h_Ratio.SetMarkerStyle(8)
-    h_Ratio.SetMarkerSize(0.7)
-    h_Ratio.GetYaxis().SetRangeUser( 0 , 2 )
-    h_Ratio.GetYaxis().SetNdivisions(504,0);
-    h_Ratio.GetYaxis().SetTitle("Pre/Rec")
-    h_Ratio.GetYaxis().SetTitleOffset(0.35)
-    h_Ratio.GetYaxis().SetTitleSize(0.13)
-    h_Ratio.GetYaxis().SetTitleSize(0.13)
-    h_Ratio.GetYaxis().SetLabelSize(0.11)
-    h_Ratio.GetXaxis().SetLabelSize(0.1)
-    h_Ratio.GetXaxis().SetTitleOffset(0.8)
-    h_Ratio.GetXaxis().SetTitleSize(0.14);
-    h_Ratio.SetStats(0)
-    axis1=TGaxis( min,1,max,1, 0,0,0, "L")
-    axis1.SetLineColor(1)
-    axis1.SetLineWidth(1)
-    for i in range(1,h_Ratio.GetNbinsX()+1,1):
-                    D  = h_pre.GetBinContent(i)
-                    eD = h_pre.GetBinError(i)
-                    if D==0: eD=0.92
-                    B  = h_rec.GetBinContent(i)
-                    eB = h_rec.GetBinError(i)
-                    if B<0.1 and eB>=B :
-                                   eB=0.92
-                                   Err= 0.
-                    if B!=0.: 
-                                   Err=TMath.Sqrt((eD*eD)/(B*B)+(D*D*eB*eB)/(B*B*B*B))
-                                   h_Ratio.SetBinContent(i, D/B)
-                                   h_Ratio.SetBinError(i, Err)
-                    if B==0.:
-                                   Err=TMath.Sqrt( (eD*eD)/(eB*eB)+(D*D*eB*eB)/(eB*eB*eB*eB) )
-                                   h_Ratio.SetBinContent(i, D/0.92)
-                                   h_Ratio.SetBinError(i, Err)
-                    if D==0 and B==0:  
-                                   h_Ratio.SetBinContent(i, -1)
-                                   h_Ratio.SetBinError(i, 0)
-                    h_Ratio.Draw("e0"); axis1.Draw();
-
-    c.SaveAs(branch_rec[options.branch-1]+"_comparision.png")
+        # Draw Comparision Plots
+    os.system("rm -rf Plots")
+    os.system("mkdir Plots")
+    for j in range(0, nvariable):
+        c = TCanvas("c","c", 700,700)
+        fPads1 = TPad("pad1", "Run2", 0.0, 0.29, 1.00, 1.00)
+        fPads2 = TPad("pad2", "", 0.00, 0.00, 1.00, 0.29)
+        fPads1.SetBottomMargin( 0.007)
+        fPads1.SetLeftMargin(   0.10)
+        fPads1.SetRightMargin(  0.03)
+        fPads2.SetLeftMargin(   0.10 )
+        fPads2.SetRightMargin(  0.03)
+        fPads2.SetBottomMargin( 0.25)
+        fPads1.Draw()
+        fPads2.Draw()
+        fPads1.cd()
+        nbin=50
+        min=-1.
+        max=1.
+        lbin=(max-min)/nbin
+        lbin=str(float((max-min)/nbin))
+        xtitle=branch_rec[j]
+        ytitle="Events/"+lbin
+        h_rec=TH1D("h_rec",""+";%s;%s"%(xtitle,ytitle),nbin,min,max)
+        h_rec.Sumw2()
+        h_pre=TH1D("h_pre",""+";%s;%s"%(xtitle,ytitle),nbin,min,max)
+        h_pre.Sumw2()
+        for i in range(x_test_noisy.shape[0]):
+                  h_rec.Fill(x_test_noisy[i][j])
+                  h_pre.Fill(x_decoded[i][j])
+        h_rec=UnderOverFlow1D(h_rec)
+        h_pre=UnderOverFlow1D(h_pre)
+        maxY = TMath.Max( h_rec.GetMaximum(), h_pre.GetMaximum() )
+        h_rec.SetLineColor(2)
+        h_rec.SetFillStyle(0)
+        h_rec.SetLineWidth(2)
+        h_rec.SetLineStyle(1)
+        h_pre.SetLineColor(3)
+        h_pre.SetFillStyle(0)
+        h_pre.SetLineWidth(2)
+        h_pre.SetLineStyle(1)
+        h_rec.SetStats(0)
+        h_pre.SetStats(0)
+        h_rec.GetYaxis().SetRangeUser( 0 , maxY*1.1 )
+        h_rec.Draw("HIST")
+        h_pre.Draw("same HIST")
+        h_rec.GetYaxis().SetTitleSize(0.06)
+        h_rec.GetYaxis().SetTitleOffset(0.78)
+        theLeg = TLegend(0.5, 0.45, 0.95, 0.82, "", "NDC")
+        theLeg.SetName("theLegend")
+        theLeg.SetBorderSize(0)
+        theLeg.SetLineColor(0)
+        theLeg.SetFillColor(0)
+        theLeg.SetFillStyle(0)
+        theLeg.SetLineWidth(0)
+        theLeg.SetLineStyle(0)
+        theLeg.SetTextFont(42)
+        theLeg.SetTextSize(.05)
+        theLeg.AddEntry(h_rec,"Reconstruction","L")
+        theLeg.AddEntry(h_pre,"Prediction","L")
+        theLeg.SetY1NDC(0.9-0.05*6-0.005)
+        theLeg.SetY1(theLeg.GetY1NDC())
+        fPads1.cd()
+        theLeg.Draw()
+        title = TLatex(0.91,0.93,"AE prediction compare with reconstruction, epochs="+str(options.epochs))
+        title.SetNDC()
+        title.SetTextSize(0.05)
+        title.SetTextFont(42)
+        title.SetTextAlign(31)
+        title.SetLineWidth(2)
+        title.Draw()
+        fPads2.cd()
+        h_Ratio=TH1D("h_Ratio",""+";%s;%s"%(xtitle,ytitle),nbin,min,max)
+        h_Ratio.SetLineColor(1)
+        h_Ratio.SetLineWidth(2)
+        h_Ratio.SetMarkerStyle(8)
+        h_Ratio.SetMarkerSize(0.7)
+        h_Ratio.GetYaxis().SetRangeUser( 0 , 2 )
+        h_Ratio.GetYaxis().SetNdivisions(504,0)
+        h_Ratio.GetYaxis().SetTitle("Pre/Rec")
+        h_Ratio.GetYaxis().SetTitleOffset(0.35)
+        h_Ratio.GetYaxis().SetTitleSize(0.13)
+        h_Ratio.GetYaxis().SetTitleSize(0.13)
+        h_Ratio.GetYaxis().SetLabelSize(0.11)
+        h_Ratio.GetXaxis().SetLabelSize(0.1)
+        h_Ratio.GetXaxis().SetTitleOffset(0.8)
+        h_Ratio.GetXaxis().SetTitleSize(0.14)
+        h_Ratio.SetStats(0)
+        axis1=TGaxis( min,1,max,1, 0,0,0, "L")
+        axis1.SetLineColor(1)
+        axis1.SetLineWidth(1)
+        for i in range(1,h_Ratio.GetNbinsX()+1,1):
+                        D  = h_pre.GetBinContent(i)
+                        eD = h_pre.GetBinError(i)
+                        if D==0: eD=0.92
+                        B  = h_rec.GetBinContent(i)
+                        eB = h_rec.GetBinError(i)
+                        if B<0.1 and eB>=B :
+                                       eB=0.92
+                                       Err= 0.
+                        if B!=0.:
+                                       Err=TMath.Sqrt((eD*eD)/(B*B)+(D*D*eB*eB)/(B*B*B*B))
+                                       h_Ratio.SetBinContent(i, D/B)
+                                       h_Ratio.SetBinError(i, Err)
+                        if B==0.:
+                                       Err=TMath.Sqrt( (eD*eD)/(eB*eB)+(D*D*eB*eB)/(eB*eB*eB*eB) )
+                                       h_Ratio.SetBinContent(i, D/0.92)
+                                       h_Ratio.SetBinError(i, Err)
+                        if D==0 and B==0:
+                                       h_Ratio.SetBinContent(i, -1)
+                                       h_Ratio.SetBinError(i, 0)
+                        h_Ratio.Draw("e0")
+                        axis1.Draw()
+        c.SaveAs("Plots/"+branch_rec[j]+"_comparision.png")
 
 if __name__ == '__main__':
     train_and_apply()
